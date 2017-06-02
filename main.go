@@ -35,6 +35,10 @@ func main() {
 	}
 	conn.MustExec(linkTable)
 
+	handleRequests()
+}
+
+func handleRequests() {
 	r := chi.NewRouter()
 	r.Get("/", home)
 	r.Get("/", notFound)
