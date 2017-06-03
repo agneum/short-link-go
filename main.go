@@ -1,15 +1,14 @@
 package main
 
 import (
-	"fmt"
+	"database/sql"
 	"log"
 	"net/http"
 	"os"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
-
-	"github.com/pressly/chi"
+	"github.com/julienschmidt/httprouter"
 )
 
 var linkTable = `
@@ -22,10 +21,10 @@ CREATE TABLE IF NOT EXISTS links (
 );`
 
 type Link struct {
-	ID        int    `db:"id"`
-	Code      string `db:"code"`
-	Link      string `db:"link"`
-	CreatedAt string `db:"created_at"`
+	ID        int     `db:"id"`
+	Code      string  `db:"code"`
+	Link      string  `db:"link"`
+	CreatedAt *string `db:"created_at"`
 }
 
 func main() {
@@ -35,37 +34,60 @@ func main() {
 	}
 	conn.MustExec(linkTable)
 
-	handleRequests()
+	handleRequests(conn)
 }
 
-func handleRequests() {
-	r := chi.NewRouter()
-	r.Get("/", home)
-	r.Get("/", notFound)
-	r.Get("/code/:code", redirect)
-	r.Post("/generate-code", generateCode)
+func handleRequests(conn *sqlx.DB) {
+	router := httprouter.New()
+
+	router.GET("/", home)
+	router.GET("/not-found", notFound)
+	router.GET("/code/:code", redir(conn))
+	router.POST("/generate-code", generateCode(conn))
 
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8084"
 	}
 
-	http.ListenAndServe(":"+port, r)
+	http.ListenAndServe(":"+port, router)
 }
 
-func home(w http.ResponseWriter, r *http.Request) {
+func homet(conn *sqlx.DB) httprouter.Handle {
+	return func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+
+		w.Write([]byte("Hello"))
+	}
+}
+func home(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	w.Write([]byte("Hello"))
 }
 
-func notFound(w http.ResponseWriter, r *http.Request) {
+func notFound(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	w.Write([]byte("Link not-found"))
 }
 
-func redirect(w http.ResponseWriter, r *http.Request) {
-	code := chi.URLParam(r, "code")
-	w.Write([]byte(fmt.Sprintf("Code: %v", code)))
+func redir(conn *sqlx.DB) httprouter.Handle {
+	return func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+		var redirectRecord Link
+
+		code := p.ByName("code")
+		err := conn.Get(&redirectRecord, "SELECT * FROM links WHERE code = ?", code)
+
+		if err == sql.ErrNoRows {
+			log.Printf("Code '%v' not found\n", code)
+			http.Redirect(w, r, "/not-found", 302)
+		} else if err != nil {
+			log.Printf("%+v\n", err)
+			http.Redirect(w, r, "/not-found", 302)
+		}
+		http.Redirect(w, r, redirectRecord.Link, 302)
+
+	}
 }
 
-func generateCode(w http.ResponseWriter, r *http.Request) {
+func generateCode(conn *sqlx.DB) httprouter.Handle {
+	return func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 
+	}
 }
