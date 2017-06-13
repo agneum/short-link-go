@@ -53,12 +53,6 @@ func handleRequests(conn *sqlx.DB) {
 	http.ListenAndServe(":"+port, router)
 }
 
-func homet(conn *sqlx.DB) httprouter.Handle {
-	return func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-
-		w.Write([]byte("Hello"))
-	}
-}
 func home(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	w.Write([]byte("Hello"))
 }
