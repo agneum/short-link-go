@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"math/rand"
 	"time"
 
@@ -33,6 +34,20 @@ func (l *Link) insertNewLink(conn *sqlx.DB) error {
 	}
 
 	return nil
+}
+
+func (l *Link) MarshalJSON() ([]byte, error) {
+	return json.Marshal(&struct {
+		Code      string `json:"code"`
+		ShortPath string `json:"short_path"`
+		Url       string `json:"url"`
+		CreatedAt string `json:"created_at"`
+	}{
+		Code:      l.Code,
+		ShortPath: "/code/" + l.Code,
+		Url:       l.Url,
+		CreatedAt: l.CreatedAt,
+	})
 }
 
 func generateCode(n int) string {

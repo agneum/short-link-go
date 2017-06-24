@@ -28,15 +28,6 @@ func TestShouldCreateShortLink(t *testing.T) {
 	}
 
 	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Errorf("there were unfulfilled expections: %s", err)
-	}
-}
-
-func TestShouldGenerateCode(t *testing.T) {
-	n := 6
-	code := generateCode(n)
-
-	if codeLength := len(code); codeLength != n {
-		t.Errorf("The length of the generated code should be equal to %d. Code length %d given", n, codeLength)
+		t.Errorf("There were unfulfilled expections: %s", err)
 	}
 }
