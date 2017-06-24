@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"encoding/json"
 	"math/rand"
 	"net/http"
 	"os"
@@ -19,7 +20,7 @@ var linkTable = `
 CREATE TABLE IF NOT EXISTS links (
   id int(10) unsigned NOT NULL AUTO_INCREMENT,
   code varchar(6) NOT NULL,
-  link LONGTEXT NOT NULL,
+  url LONGTEXT NOT NULL,
   created_at DATETIME,
   PRIMARY KEY (id), UNIQUE KEY UNIQ_Code (code)
 );`
@@ -27,10 +28,31 @@ CREATE TABLE IF NOT EXISTS links (
 var log = logrus.New()
 
 type Link struct {
-	ID        int     `db:"id"`
-	Code      string  `db:"code"`
-	Link      string  `db:"link"`
-	CreatedAt *string `db:"created_at"`
+	ID        int    `db:"id" json:"-"`
+	Code      string `db:"code" json:"code"`
+	Url       string `db:"url" json:"url"`
+	CreatedAt string `db:"created_at" json:"created_at"`
+}
+
+type DefaultResponse struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+}
+
+type LinkResponse struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+	Link    *Link  `json:"link"`
+}
+
+func newLink(code, url string) *Link {
+	l := &Link{
+		Code:      code,
+		Url:       url,
+		CreatedAt: time.Now().Format(time.RFC3339),
+	}
+
+	return l
 }
 
 func main() {
@@ -80,56 +102,87 @@ func redirect(conn *sqlx.DB) httprouter.Handle {
 			return
 		}
 
-		http.Redirect(w, r, redirectRecord.Link, 302)
+		http.Redirect(w, r, redirectRecord.Url, 302)
 	}
 }
 
 func generateLink(conn *sqlx.DB) httprouter.Handle {
 	return func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 		var link Link
+		w.Header().Set("Content-Type", "application/json")
 
 		err := r.ParseForm()
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			log.Error(err)
+			err = json.NewEncoder(w).Encode(
+				&DefaultResponse{false, "Parsing error"},
+			)
+			if err != nil {
+				log.Error(err)
+			}
 			return
 		}
+
 		url := r.PostFormValue("url")
-
 		if url == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Url is required"))
+			err = json.NewEncoder(w).Encode(
+				&DefaultResponse{false, "Url is required"},
+			)
+			if err != nil {
+				log.Error(err)
+			}
 			return
 		}
 
-		err = conn.Get(&link, "SELECT * FROM links WHERE link = ?", url)
+		err = conn.Get(&link, "SELECT * FROM links WHERE url = ?", url)
 
 		if err == sql.ErrNoRows {
-			code, err := insertNewLink(conn, url)
+			link, err := insertNewLink(conn, url)
 			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
+				err = json.NewEncoder(w).Encode(
+					&DefaultResponse{false, "Insert error"},
+				)
+				if err != nil {
+					log.Error(err)
+				}
 			}
-			w.Write([]byte(r.Host + "/code/" + code))
+
+			err = json.NewEncoder(w).Encode(
+				&LinkResponse{true, "Short link has been created", link},
+			)
+			if err != nil {
+				log.Error(err)
+			}
 			return
 		} else if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			err = json.NewEncoder(w).Encode(
+				&DefaultResponse{false, "Database error"},
+			)
+			if err != nil {
+				log.Error(err)
+			}
 			return
 		}
 
-		w.Write([]byte(r.Host + "/code/" + link.Code))
+		err = json.NewEncoder(w).Encode(
+			&LinkResponse{true, "Short link already exists", &link},
+		)
+		if err != nil {
+			log.Error(err)
+		}
 	}
 }
 
-func insertNewLink(conn *sqlx.DB, url string) (string, error) {
-	datetime := time.Now().Format(time.RFC3339)
+func insertNewLink(conn *sqlx.DB, url string) (*Link, error) {
 	code := generateCode(6)
+	l := newLink(code, url)
 
-	_, err := conn.Exec("INSERT INTO links (code, link, created_at) VALUES (?, ?, ?)", code, url, datetime)
+	_, err := conn.Exec("INSERT INTO links (code, url, created_at) VALUES (?, ?, ?)", l.Code, l.Url, l.CreatedAt)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	return code, nil
+	return l, nil
 }
 
 func generateCode(n int) string {
