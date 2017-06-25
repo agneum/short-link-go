@@ -1,2 +1,3 @@
 short-link-go
 .env
+vendor/
