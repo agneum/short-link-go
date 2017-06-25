@@ -29,9 +29,9 @@ func handleRequests(conn *sqlx.DB) {
 	router.GET("/code/:code", redirect(conn))
 	router.POST("/generate-link", generateLink(conn))
 
-	port := os.Getenv("PORT")
+	port := os.Getenv("SERVICE_PORT")
 	if port == "" {
-		port = "8084"
+		log.Fatal("Required parameter service port is not set")
 	}
 
 	http.ListenAndServe(":"+port, router)

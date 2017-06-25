@@ -1,0 +1,30 @@
+version: '2'
+
+services:
+    db:
+        image: mysql:5.6
+        restart: always
+        environment:
+            MYSQL_ROOT_PASSWORD: ${DATABASE_ROOT_PASSWORD}
+            MYSQL_DATABASE: ${DATABASE_NAME}
+            MYSQL_USER: ${DATABASE_USER}
+            MYSQL_PASSWORD: ${DATABASE_PASSWORD}
+        networks:
+          - app
+    app:
+        build:
+            context: .
+            args:
+                SERVICE_PORT: ${SERVICE_PORT}
+        ports:
+            - 8888:8888
+        env_file:
+            - .env
+        links:
+            - db
+        networks:
+          - app
+
+networks:
+  app:
+   driver: "bridge"
